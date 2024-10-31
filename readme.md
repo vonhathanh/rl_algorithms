@@ -1,3 +1,9 @@
+## Implementation detail
+
+- We'll mimick stablebaseline API: model = DQN(env, args)
+- model.train(step=1000)
+- model.predict(input)
+
 ## DQN
 
 - choose the maximum max(Q_target(S_t+1, a'), a') based on params of Q_target
