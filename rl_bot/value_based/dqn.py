@@ -1,3 +1,5 @@
+import random
+
 import gymnasium as gym
 import numpy as np
 import torch
@@ -6,6 +8,7 @@ import torch.optim as optim
 from torch import nn
 
 from rl_bot.replay_memory import ReplayMemory
+from rl_bot.utils import linear_schedule
 
 
 class MLPPolicy(nn.Module):
@@ -45,9 +48,15 @@ class DQN:
         for i in range(n_steps):
             # Initialise sequence s1 = {x1} and preprocessed sequenced φ1 = φ(s1), we use mlp policy, no preprocess
             state, info = self.env.reset(seed=self.args["seed"])
+
+            epislon = linear_schedule(self.args["epsilon_start"],
+                                      self.args["epsilon_end"],
+                                      self.args["explore_duration"],
+                                      i)
+
             for _ in range(self.args["T"]):
                 # select action a_t with probability epsilon
-                action = self.select_action(state, self.args["epsilon"])
+                action = self.select_action(torch.tensor(state).to(self.device), epislon)
                 # Execute action at in emulator and observe reward r_t and new state s_t+1
                 next_state, reward, termination, truncation, _ = self.env.step(action)
                 # Store transition in replay memory D
@@ -55,31 +64,33 @@ class DQN:
                 # Set s_t+1 = s_t
                 state = next_state
                 # Sample random minibatch of transitions (φj, aj, rj, φj+1) from D
-                if len(self.replay_memory) >= self.args["minibatch_size"]:
-                    minibatch = self.replay_memory.sample(self.args["minibatch_size"])
-                    self.train_minibatch(minibatch)
+                self.train_minibatch()
                 # episode is finished
                 if termination or truncation:
                     break
 
     def select_action(self, state, epsilon: float):
-        if np.random.rand(1)[0] <= epsilon:
+        if random.random() <= epsilon:
             return np.random.choice(self.env.action_space.n)
         else:
             logits = self.policy_net(state)
             return torch.argmax(logits)
 
-    def train_minibatch(self, minibatch):
+    def train_minibatch(self):
+        if len(self.replay_memory) < self.args["minibatch_size"]:
+            return
+
+        minibatch = self.replay_memory.sample(self.args["minibatch_size"])
         # states = minibatch["states"]
-        actions = minibatch["actions"]
-        rewards = minibatch["rewards"]
-        next_states = minibatch["next_states"]
-        dones = minibatch["dones"]
+        actions = torch.tensor(minibatch["actions"]).to(self.device)
+        rewards = torch.tensor(minibatch["rewards"]).to(self.device)
+        next_states = torch.tensor(minibatch["next_states"]).to(self.device)
+        dones = torch.tensor(minibatch["dones"]).to(self.device)
         # calculate action that has the maximum Q value using target network: Q(s', a', old_phi)
         q_values = torch.max(self.target_net(next_states))
         # y_j = r_j if s_j+1 is terminal state
         # else r_j + gamma*q_values
-        target = rewards + q_values * (1 - dones)
+        target = rewards + self.args["gamma"] * q_values * (1 - dones)
 
         loss = F.mse_loss(target, actions)
 
@@ -89,7 +100,33 @@ class DQN:
 
         self.optimizer.step()
 
-        # copy weights from policy net to target net if update interval % t == 0
-        self.target_net.load_state_dict(self.policy_net.state_dict())
+        # soft update of the target network's weights
+        # θ′ ← τ θ + (1 −τ )θ′
+        target_net_state_dict = self.target_net.state_dict()
+        policy_net_state_dict = self.policy_net.state_dict()
+        TAU = self.args["tau"]
+        for k in policy_net_state_dict:
+            target_net_state_dict[k] = policy_net_state_dict[k] * TAU + target_net_state_dict[k] * (1 - TAU)
+        self.target_net.load_state_dict(target_net_state_dict)
 
-        
+if __name__ == '__main__':
+
+    args = {
+        "num_envs": 2,
+        "replay_memory_size": 100,
+        "minibatch_size": 36,
+        "lr": 1e-3,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.1,
+        "explore_duration": 500,
+        "gamma": 0.99,
+        "seed": 1993,
+        "tau": 0.005,
+        "T": 1000,
+    }
+
+    envs = gym.make_vec("CartPole-v1", num_envs=args["num_envs"])
+
+    model = DQN(envs, args)
+
+    model.train(n_steps=100)
