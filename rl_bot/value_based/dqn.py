@@ -47,7 +47,7 @@ class DQN:
     def train(self, n_steps: int):
         for i in range(n_steps):
             # Initialise sequence s1 = {x1} and preprocessed sequenced φ1 = φ(s1), we use mlp policy, no preprocess
-            state, info = self.env.reset(seed=self.args["seed"])
+            states, info = self.env.reset(seed=self.args["seed"])
 
             epislon = linear_schedule(self.args["epsilon_start"],
                                       self.args["epsilon_end"],
@@ -56,22 +56,22 @@ class DQN:
 
             for _ in range(self.args["T"]):
                 # select action a_t with probability epsilon
-                action = self.select_action(torch.tensor(state).to(self.device), epislon)
+                actions = self.select_action(torch.tensor(states).to(self.device), epislon)
                 # Execute action at in emulator and observe reward r_t and new state s_t+1
-                next_state, reward, termination, truncation, _ = self.env.step(action)
+                next_states, rewards, terminations, truncations, _ = self.env.step(actions)
                 # Store transition in replay memory D
-                self.replay_memory.store((state, action, reward, next_state, termination))
+                self.replay_memory.store((states, actions, rewards, next_states, terminations))
                 # Set s_t+1 = s_t
-                state = next_state
+                states = next_states
                 # Sample random minibatch of transitions (φj, aj, rj, φj+1) from D
                 self.train_minibatch()
                 # episode is finished
-                if termination or truncation:
+                if np.any(terminations) or np.any(truncations):
                     break
 
     def select_action(self, state, epsilon: float):
         if random.random() <= epsilon:
-            return np.random.choice(self.env.action_space.n)
+            return self.env.action_space.sample()
         else:
             logits = self.policy_net(state)
             return torch.argmax(logits)
@@ -82,15 +82,15 @@ class DQN:
 
         minibatch = self.replay_memory.sample(self.args["minibatch_size"])
         # states = minibatch["states"]
-        actions = torch.tensor(minibatch["actions"]).to(self.device)
-        rewards = torch.tensor(minibatch["rewards"]).to(self.device)
-        next_states = torch.tensor(minibatch["next_states"]).to(self.device)
-        dones = torch.tensor(minibatch["dones"]).to(self.device)
+        actions = torch.tensor(minibatch["actions"]).to(self.device, dtype=torch.float32)
+        rewards = torch.tensor(minibatch["rewards"]).to(self.device, dtype=torch.float32)
+        next_states = torch.tensor(minibatch["next_states"]).to(self.device, dtype=torch.float32)
+        dones = torch.tensor(minibatch["dones"]).to(self.device, dtype=torch.float32)
         # calculate action that has the maximum Q value using target network: Q(s', a', old_phi)
-        q_values = torch.max(self.target_net(next_states))
+        q_values = self.target_net(next_states).max(dim=1)
         # y_j = r_j if s_j+1 is terminal state
         # else r_j + gamma*q_values
-        target = rewards + self.args["gamma"] * q_values * (1 - dones)
+        target = rewards + torch.tensor(self.args["gamma"]).to(self.device, dtype=torch.float32) * q_values * (1 - dones)
 
         loss = F.mse_loss(target, actions)
 
@@ -113,7 +113,7 @@ class DQN:
 if __name__ == '__main__':
 
     args = {
-        "num_envs": 2,
+        "num_envs": 8,
         "replay_memory_size": 100,
         "minibatch_size": 36,
         "lr": 1e-3,
