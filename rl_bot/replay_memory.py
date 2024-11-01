@@ -12,7 +12,6 @@ class ReplayMemory:
 
         self.ptr = 0
         self.size, self.curr_size = size, 0
-        self.idx = np.arange(self.size)
 
     def store(self, memory: tuple):
         state, action, reward, next_state, done = memory
