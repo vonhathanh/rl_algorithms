@@ -35,6 +35,7 @@ class DQN:
         )
         self.env = env
         self.args = args
+        self.args["tau"] = torch.tensor(args["gamma"]).to(self.device, dtype=torch.float32)
         self.policy_net = MLPPolicy(env).to(self.device)
         self.target_net = MLPPolicy(env).to(self.device)
         self.replay_memory = ReplayMemory(args["replay_memory_size"], env.single_observation_space.shape)
@@ -46,6 +47,7 @@ class DQN:
 
     def train(self, n_steps: int):
         for i in range(n_steps):
+            print(f"{i=}")
             # Initialise sequence s1 = {x1} and preprocessed sequenced φ1 = φ(s1), we use mlp policy, no preprocess
             states, info = self.env.reset(seed=self.args["seed"])
 
@@ -74,7 +76,7 @@ class DQN:
             return self.env.action_space.sample()
         else:
             logits = self.policy_net(state)
-            return torch.argmax(logits)
+            return torch.argmax(logits, dim=1).cpu().numpy()
 
     def train_minibatch(self):
         if len(self.replay_memory) < self.args["minibatch_size"]:
@@ -87,10 +89,10 @@ class DQN:
         next_states = torch.tensor(minibatch["next_states"]).to(self.device, dtype=torch.float32)
         dones = torch.tensor(minibatch["dones"]).to(self.device, dtype=torch.float32)
         # calculate action that has the maximum Q value using target network: Q(s', a', old_phi)
-        q_values = self.target_net(next_states).max(dim=1)
+        q_values = self.target_net(next_states).max(dim=1).values
         # y_j = r_j if s_j+1 is terminal state
         # else r_j + gamma*q_values
-        target = rewards + torch.tensor(self.args["gamma"]).to(self.device, dtype=torch.float32) * q_values * (1 - dones)
+        target = rewards + self.args["tau"] * q_values * (1 - dones)
 
         loss = F.mse_loss(target, actions)
 
