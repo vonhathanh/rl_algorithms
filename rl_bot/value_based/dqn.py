@@ -19,7 +19,11 @@ class MLPPolicy(nn.Module):
 
         output_dim = env.single_action_space.n
 
-        self.net = nn.Sequential(nn.Linear(input_dim, 100), nn.ReLU(), nn.Linear(100, output_dim))
+        self.net = nn.Sequential(nn.Linear(input_dim, 128),
+                                 nn.ReLU(),
+                                 nn.Linear(128, 128),
+                                 nn.ReLU(),
+                                 nn.Linear(128, output_dim))
 
     def forward(self, x):
         return self.net(x)
@@ -44,7 +48,7 @@ class DQN:
         # copy weights from policy net to target net
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
-        self.optimizer = optim.Adam(self.policy_net.parameters(), self.args["lr"])
+        self.optimizer = optim.Adam(self.policy_net.parameters(), self.args["lr"], amsgrad=True)
 
     def train(self, n_steps: int):
         for i in range(n_steps):
@@ -61,7 +65,7 @@ class DQN:
                                       self.args["epsilon_end"],
                                       self.args["explore_duration"],
                                       i)
-
+            total_scores = []
             for t in range(self.args["T"]):
                 # select action a_t with probability epsilon
                 actions = self.select_action(torch.tensor(states).to(self.device), epislon)
@@ -72,7 +76,13 @@ class DQN:
                     if not autoreset[v]:
                         self.replay_memory.store((states[v], actions[v], rewards[v], next_states[v], autoreset[v]))
                     else:
+                        # store data to compute the mean total rewards
+                        total_scores.append(t - last_reset[v])
                         last_reset[v] = t
+
+                if len(total_scores) > 100:
+                    print(f"mean scores: {np.mean(total_scores)}")
+                    total_scores = []
                 # Set s_t+1 = s_t
                 states = next_states
                 # autoreset helps us mask and skip terminated or truncated observation
@@ -85,8 +95,9 @@ class DQN:
         if random.random() <= epsilon:
             return self.env.action_space.sample()
         else:
-            logits = self.policy_net(state)
-            return torch.argmax(logits, dim=1).cpu().numpy()
+            with torch.no_grad():
+                logits = self.policy_net(state)
+                return torch.argmax(logits, dim=1).cpu().numpy()
 
     def train_minibatch(self):
         if len(self.replay_memory) < self.args["minibatch_size"]:
@@ -94,24 +105,25 @@ class DQN:
 
         minibatch = self.replay_memory.sample(self.args["minibatch_size"])
         states = torch.tensor(minibatch["states"]).to(self.device, dtype=torch.float32)
-        actions = torch.tensor(minibatch["actions"]).to(self.device, dtype=torch.int32)
+        actions = torch.tensor(minibatch["actions"]).to(self.device, dtype=torch.int64)
         rewards = torch.tensor(minibatch["rewards"]).to(self.device, dtype=torch.float32)
         next_states = torch.tensor(minibatch["next_states"]).to(self.device, dtype=torch.float32)
         dones = torch.tensor(minibatch["dones"]).to(self.device, dtype=torch.float32)
 
-        # calculate action that has the maximum Q value using target network: Q(s', a', old_phi)
-        q_targets = self.target_net(next_states).max(dim=1).values
-        # y_j = r_j if s_j+1 is terminal state
-        # else r_j + gamma*q_targets
-        target = rewards + self.args["gamma"] * q_targets * (1 - dones)
+        with torch.no_grad():
+            # calculate action that has the maximum Q value using target network: Q(s', a', old_phi)
+            q_targets = self.target_net(next_states).max(dim=1).values
+            # y_j = r_j if s_j+1 is terminal state
+            # else r_j + gamma*q_targets
+            target = rewards + self.args["gamma"] * q_targets * (1 - dones)
 
         q_values = self.policy_net(states)
         q_values = q_values[torch.arange(self.args["minibatch_size"]), actions]
 
         loss = F.mse_loss(target, q_values)
-        # print(f"{loss.item()=}")
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
         # soft update of the target network's weights
@@ -128,11 +140,11 @@ if __name__ == '__main__':
 
     args = {
         "num_envs": 8,
-        "replay_memory_size": 1000,
-        "minibatch_size": 36,
-        "lr": 1e-3,
-        "epsilon_start": 1.0,
-        "epsilon_end": 0.1,
+        "replay_memory_size": 10000,
+        "minibatch_size": 128,
+        "lr": 1e-4,
+        "epsilon_start": 0.9,
+        "epsilon_end": 0.05,
         "explore_duration": 1000,
         "gamma": 0.99,
         "seed": 1993,
