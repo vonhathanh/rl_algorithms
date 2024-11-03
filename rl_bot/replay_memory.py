@@ -14,18 +14,16 @@ class ReplayMemory:
         self.size, self.curr_size = size, 0
 
     def store(self, memory: tuple):
-        states, actions, rewards, next_states, dones = memory
-        # sometimes step_size would make the memory overflow, we have to clip it
-        step_size = min(len(states), self.size - self.ptr)
+        states, action, reward, next_state, done = memory
 
-        self.states[self.ptr: self.ptr + step_size] = states[:step_size]
-        self.actions[self.ptr: self.ptr + step_size] = actions[:step_size]
-        self.rewards[self.ptr: self.ptr + step_size] = rewards[:step_size]
-        self.next_states[self.ptr: self.ptr + step_size] = next_states[:step_size]
-        self.dones[self.ptr: self.ptr + step_size] = dones[:step_size]
+        self.states[self.ptr] = states
+        self.actions[self.ptr] = action
+        self.rewards[self.ptr] = reward
+        self.next_states[self.ptr] = next_state
+        self.dones[self.ptr] = done
 
-        self.ptr = (self.ptr + step_size) % self.size
-        self.curr_size = min(self.curr_size + step_size, self.size)
+        self.ptr = (self.ptr + 1) % self.size
+        self.curr_size = min(self.curr_size + 1, self.size)
 
     def __len__(self) -> int:
         return self.curr_size
