@@ -117,15 +117,14 @@ class DQN:
         data = self.replay_memory.sample(self.args["minibatch_size"])
 
         with torch.no_grad():
-            # calculate action that has the maximum Q value using target network: Q(s', a', old_phi)
-            q_targets = self.target_net(data["next_states"]).max(dim=1).values
+            actions = torch.argmax(self.policy_net(data["next_states"]), dim=1)
+            # calculate q_target
+            q_targets = torch.gather(self.target_net(data["next_states"]), 1, actions.unsqueeze(1)).squeeze(1)
             # y_j = r_j if s_j+1 is terminal state
             # else r_j + gamma*q_targets
             target = data["rewards"] + self.args["gamma"] * q_targets * (1 - data["dones"])
 
-        q_values = self.policy_net(data["states"])
-        # could use torch.gather() but I'm not a fan of that fucking function
-        q_values = q_values[torch.arange(self.args["minibatch_size"]), data["actions"]]
+        q_values = torch.gather(self.policy_net(data["states"]), 1, data["actions"].unsqueeze(1)).squeeze(1)
 
         # typical backward pass
         loss = F.mse_loss(target, q_values)
