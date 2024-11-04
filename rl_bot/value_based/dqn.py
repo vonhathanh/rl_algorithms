@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 from torch import nn
 
 from rl_bot.replay_memory import ReplayMemory
@@ -50,7 +51,11 @@ class DQN:
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), self.args["lr"], amsgrad=True)
 
+        # logging/visualizing
+        self.writer = SummaryWriter("../runs")
+
     def train(self, n_steps: int):
+        scores = []
         # Initialise sequence s1 = {x1} and preprocessed sequenced φ1 = φ(s1), we use mlp policy, no preprocess
         states, infos = self.env.reset(seed=self.args["seed"])
         # a mask to skip the terminated state to become the parent of a new state
@@ -58,7 +63,7 @@ class DQN:
         # stores the last reset step t, so we know how good our agents were
         # this is not needed in normal env, but for VecEnv
         last_reset = np.zeros(envs.num_envs)
-        for i in range(n_steps):
+        for i in range(1, n_steps):
             # select action a_t with probability epsilon
             actions = self.select_action(torch.tensor(states).to(self.device), i)
             # Execute action at in emulator and observe reward r_t and new state s_t+1
@@ -70,13 +75,22 @@ class DQN:
                 if not skipped[v]:
                     self.replay_memory.store((states[v], actions[v], rewards[v], next_states[v], autoreset[v]))
                 if autoreset[v]:
-                    print(f"scores: {i - last_reset[v]}")
+                    scores.append(i - last_reset[v])
                     last_reset[v] = i
             # Set s_t+1 = s_t
             states = next_states
             skipped = autoreset.copy()
             # Sample random minibatch of transitions (φj, aj, rj, φj+1) from D
-            self.train_minibatch()
+            loss = self.train_minibatch()
+
+            if len(scores) >= self.args["log_frequency"]:
+                self.writer.add_scalar("Avg Reward", np.mean(scores), i)
+                self.writer.add_scalar("Loss", loss.item(), i)
+                print(f"Timestep: {i}, Avg reward: {np.mean(scores)}, Loss: {loss.item()}, ")
+                scores.clear()
+
+        self.env.close()
+        self.writer.close()
 
 
     def select_action(self, state, i: int):
@@ -107,8 +121,10 @@ class DQN:
             target = data["rewards"] + self.args["gamma"] * q_targets * (1 - data["dones"])
 
         q_values = self.policy_net(data["states"])
+        # could use torch.gather() but I'm not a fan of that fucking function
         q_values = q_values[torch.arange(self.args["minibatch_size"]), data["actions"]]
 
+        # typical backward pass
         loss = F.mse_loss(target, q_values)
         self.optimizer.zero_grad()
         loss.backward()
@@ -125,6 +141,8 @@ class DQN:
             target_net_state_dict[k] = policy_net_state_dict[k] * TAU + target_net_state_dict[k] * (1 - TAU)
         self.target_net.load_state_dict(target_net_state_dict)
 
+        return loss
+
 if __name__ == '__main__':
 
     args = {
@@ -140,6 +158,7 @@ if __name__ == '__main__':
         "tau": 0.005,
         "T": 500,
         "n_steps": 10000,
+        "log_frequency": 10,
     }
 
     random.seed(args["seed"])
