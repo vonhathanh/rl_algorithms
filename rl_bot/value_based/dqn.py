@@ -52,7 +52,7 @@ class DQN:
         self.optimizer = optim.AdamW(self.policy_net.parameters(), self.args["lr"], amsgrad=True)
 
         # logging/visualizing
-        self.writer = SummaryWriter("../runs")
+        self.writer = SummaryWriter(args["log_dir"])
 
     def train(self, n_steps: int):
         scores = []
@@ -159,6 +159,7 @@ if __name__ == '__main__':
         "T": 500,
         "n_steps": 10000,
         "log_frequency": 10,
+        "log_dir": "../../runs"
     }
 
     random.seed(args["seed"])
