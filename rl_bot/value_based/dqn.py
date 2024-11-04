@@ -43,7 +43,7 @@ class DQN:
         self.args["gamma"] = torch.tensor(args["gamma"]).to(self.device, dtype=torch.float32)
         self.policy_net = MLPPolicy(env).to(self.device)
         self.target_net = MLPPolicy(env).to(self.device)
-        self.replay_memory = ReplayMemory(args["replay_memory_size"], env.single_observation_space.shape)
+        self.replay_memory = ReplayMemory(args["replay_memory_size"], env.single_observation_space.shape, self.device)
 
         # copy weights from policy net to target net
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -97,22 +97,17 @@ class DQN:
         if len(self.replay_memory) < self.args["minibatch_size"]:
             return
 
-        minibatch = self.replay_memory.sample(self.args["minibatch_size"])
-        states = torch.tensor(minibatch["states"]).to(self.device, dtype=torch.float32)
-        actions = torch.tensor(minibatch["actions"]).to(self.device, dtype=torch.int64)
-        rewards = torch.tensor(minibatch["rewards"]).to(self.device, dtype=torch.float32)
-        next_states = torch.tensor(minibatch["next_states"]).to(self.device, dtype=torch.float32)
-        dones = torch.tensor(minibatch["dones"]).to(self.device, dtype=torch.float32)
+        data = self.replay_memory.sample(self.args["minibatch_size"])
 
         with torch.no_grad():
             # calculate action that has the maximum Q value using target network: Q(s', a', old_phi)
-            q_targets = self.target_net(next_states).max(dim=1).values
+            q_targets = self.target_net(data["next_states"]).max(dim=1).values
             # y_j = r_j if s_j+1 is terminal state
             # else r_j + gamma*q_targets
-            target = rewards + self.args["gamma"] * q_targets * (1 - dones)
+            target = data["rewards"] + self.args["gamma"] * q_targets * (1 - data["dones"])
 
-        q_values = self.policy_net(states)
-        q_values = q_values[torch.arange(self.args["minibatch_size"]), actions]
+        q_values = self.policy_net(data["states"])
+        q_values = q_values[torch.arange(self.args["minibatch_size"]), data["actions"]]
 
         loss = F.mse_loss(target, q_values)
         self.optimizer.zero_grad()
