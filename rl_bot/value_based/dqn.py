@@ -40,10 +40,10 @@ class DQN:
         )
         self.env = env
         self.args = args
-        self.args["tau"] = torch.tensor(args["tau"]).to(self.device, dtype=torch.float32)
         self.args["gamma"] = torch.tensor(args["gamma"]).to(self.device, dtype=torch.float32)
         self.policy_net = MLPPolicy(env).to(self.device)
         self.target_net = MLPPolicy(env).to(self.device)
+        self.target_net.eval()
         self.replay_memory = ReplayMemory(args["replay_memory_size"], env.single_observation_space.shape, self.device)
 
         # copy weights from policy net to target net
@@ -82,6 +82,9 @@ class DQN:
             skipped = autoreset.copy()
             # Sample random minibatch of transitions (φj, aj, rj, φj+1) from D
             loss = self.train_minibatch()
+
+            if i % self.args["target_net_update_frequency"] == 0:
+                self.target_net.load_state_dict(self.policy_net.state_dict())
 
             if len(scores) >= self.args["log_frequency"]:
                 self.writer.add_scalar("Avg Reward", np.mean(scores), i)
@@ -132,14 +135,14 @@ class DQN:
         self.optimizer.step()
 
         # soft update of the target network's weights
-        target_net_state_dict = self.target_net.state_dict()
-        policy_net_state_dict = self.policy_net.state_dict()
+        # target_net_state_dict = self.target_net.state_dict()
+        # policy_net_state_dict = self.policy_net.state_dict()
 
-        TAU = self.args["tau"]
-        # θ′ ← τ θ + (1 −τ )θ′
-        for k in policy_net_state_dict:
-            target_net_state_dict[k] = policy_net_state_dict[k] * TAU + target_net_state_dict[k] * (1 - TAU)
-        self.target_net.load_state_dict(target_net_state_dict)
+        # TAU = self.args["tau"]
+        # # θ′ ← τ θ + (1 −τ )θ′
+        # for k in policy_net_state_dict:
+        #     target_net_state_dict[k] = policy_net_state_dict[k] * TAU + target_net_state_dict[k] * (1 - TAU)
+        # self.target_net.load_state_dict(target_net_state_dict)
 
         return loss
 
@@ -152,12 +155,11 @@ if __name__ == '__main__':
         "lr": 1e-4,
         "epsilon_start": 0.9,
         "epsilon_end": 0.05,
-        "explore_duration": 1000,
+        "explore_duration": 5000,
         "gamma": 0.99,
         "seed": 1993,
-        "tau": 0.005,
-        "T": 500,
-        "n_steps": 10000,
+        "target_net_update_frequency": 20,
+        "n_steps": 15000,
         "log_frequency": 10,
         "log_dir": "../../runs"
     }
