@@ -48,56 +48,50 @@ class DQN:
         # copy weights from policy net to target net
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
-        self.optimizer = optim.Adam(self.policy_net.parameters(), self.args["lr"], amsgrad=True)
+        self.optimizer = optim.AdamW(self.policy_net.parameters(), self.args["lr"], amsgrad=True)
 
     def train(self, n_steps: int):
+        # Initialise sequence s1 = {x1} and preprocessed sequenced φ1 = φ(s1), we use mlp policy, no preprocess
+        states, infos = self.env.reset(seed=self.args["seed"])
+        # a mask to skip the terminated state to become the parent of a new state
+        skipped = np.zeros(envs.num_envs)
+        # stores the last reset step t, so we know how good our agents were
+        # this is not needed in normal env, but for VecEnv
+        last_reset = np.zeros(envs.num_envs)
         for i in range(n_steps):
-            print(f"{i=}")
-            # Initialise sequence s1 = {x1} and preprocessed sequenced φ1 = φ(s1), we use mlp policy, no preprocess
-            states, infos = self.env.reset(seed=self.args["seed"])
-            # using autoreset as gymnasium's document:
-            # https://gymnasium.farama.org/gymnasium_release_notes/#release-v1-0-0
-            autoreset = np.zeros(envs.num_envs)
-            # stores the last reset step t, so we know how good our agents were
-            last_reset = np.zeros(envs.num_envs)
-
-            epislon = linear_schedule(self.args["epsilon_start"],
-                                      self.args["epsilon_end"],
-                                      self.args["explore_duration"],
-                                      i)
-            total_scores = []
-            for t in range(self.args["T"]):
-                # select action a_t with probability epsilon
-                actions = self.select_action(torch.tensor(states).to(self.device), epislon)
-                # Execute action at in emulator and observe reward r_t and new state s_t+1
-                next_states, rewards, terminations, truncations, infos = self.env.step(actions)
-                # Store transition in replay memory D
-                for v in range(self.env.num_envs):
-                    if not autoreset[v]:
-                        self.replay_memory.store((states[v], actions[v], rewards[v], next_states[v], autoreset[v]))
-                    else:
-                        # store data to compute the mean total rewards
-                        total_scores.append(t - last_reset[v])
-                        last_reset[v] = t
-
-                if len(total_scores) > 100:
-                    print(f"mean scores: {np.mean(total_scores)}")
-                    total_scores = []
-                # Set s_t+1 = s_t
-                states = next_states
-                # autoreset helps us mask and skip terminated or truncated observation
-                autoreset = np.logical_or(terminations, truncations)
-                # Sample random minibatch of transitions (φj, aj, rj, φj+1) from D
-                self.train_minibatch()
+            # select action a_t with probability epsilon
+            actions = self.select_action(torch.tensor(states).to(self.device), i)
+            # Execute action at in emulator and observe reward r_t and new state s_t+1
+            next_states, rewards, terminations, truncations, infos = self.env.step(actions)
+            # autoreset helps us mask and skip terminated or truncated observation
+            autoreset = np.logical_or(terminations, truncations)
+            # Store transition in replay memory D
+            for v in range(self.env.num_envs):
+                if not skipped[v]:
+                    self.replay_memory.store((states[v], actions[v], rewards[v], next_states[v], autoreset[v]))
+                if autoreset[v]:
+                    print(f"scores: {i - last_reset[v]}")
+                    last_reset[v] = i
+            # Set s_t+1 = s_t
+            states = next_states
+            skipped = autoreset.copy()
+            # Sample random minibatch of transitions (φj, aj, rj, φj+1) from D
+            self.train_minibatch()
 
 
-    def select_action(self, state, epsilon: float):
+    def select_action(self, state, i: int):
+        # epsilon greedy strategy
+        epsilon = linear_schedule(self.args["epsilon_start"],
+                                  self.args["epsilon_end"],
+                                  self.args["explore_duration"],
+                                  i)
+
         if random.random() <= epsilon:
             return self.env.action_space.sample()
-        else:
-            with torch.no_grad():
-                logits = self.policy_net(state)
-                return torch.argmax(logits, dim=1).cpu().numpy()
+
+        with torch.no_grad():
+            logits = self.policy_net(state)
+            return torch.argmax(logits, dim=1).cpu().numpy()
 
     def train_minibatch(self):
         if len(self.replay_memory) < self.args["minibatch_size"]:
@@ -123,7 +117,7 @@ class DQN:
         loss = F.mse_loss(target, q_values)
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
         self.optimizer.step()
 
         # soft update of the target network's weights
@@ -156,8 +150,6 @@ if __name__ == '__main__':
     random.seed(args["seed"])
     np.random.seed(args["seed"])
     torch.manual_seed(args["seed"])
-    # don't need the line below because it's only work with convolution operation
-    # torch.backends.cudnn.deterministic = args.torch_deterministic
 
     envs = gym.make_vec("CartPole-v1", num_envs=args["num_envs"])
 
