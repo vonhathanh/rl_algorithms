@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def init(tree: np.ndarray, data: np.ndarray, i: int, l: int, r: int):
+def init(tree: np.ndarray, data: np.ndarray, l: int, r: int, i: int = 0):
     """
     initialize the tree, we must initialize the leaves first then the n-1th layer..., 0th layer (root)
     The initialization procedure usually implemented by recursive calls:
@@ -17,7 +17,7 @@ def init(tree: np.ndarray, data: np.ndarray, i: int, l: int, r: int):
         tree[i] = data[l]
     else:
         mid = (l + r) // 2
-        tree[i] = init(tree, data, i*2+1, l, mid) + init(tree, data, i*2+2, mid+1, r)
+        tree[i] = init(tree, data, l, mid, i*2+1) + init(tree, data, mid+1, r, i*2+2)
     return tree[i]
 
 def update_tree(tree: np.ndarray, data: np.ndarray, diff: float, i: int):
@@ -62,7 +62,7 @@ def test_init():
     data = np.array([1, 2, 3, 4, 5])
     n = len(data)
     tree = np.zeros(2 * n - 1)
-    init(tree, data, 0, 0, n - 1)
+    init(tree, data, 0, n - 1)
     # Expected values in tree based on the sum of ranges
     assert tree[0] == 15, f"Root value incorrect, expected 15 but got {tree[0]}"
     assert tree[1] == 6, f"Left child of root incorrect, expected 6 but got {tree[1]}"
@@ -74,7 +74,7 @@ def test_update():
     data = np.array([1, 2, 3, 4, 5])
     n = len(data)
     tree = np.zeros(2 * n - 1)
-    init(tree, data, 0, 0, n - 1)
+    init(tree, data, 0, n - 1)
 
     # Update data[2] from 3 to 6 (difference of 3)
     update_tree(tree, data, diff=3, i=2)
@@ -89,7 +89,7 @@ def test_query_sum():
     data = np.array([1, 2, 3, 4, 5])
     n = len(data)
     tree = np.zeros(2 * n - 1)
-    init(tree, data, 0, 0, n - 1)
+    init(tree, data, 0, n - 1)
 
     # Query full range
     result = query_sum(tree, 0, n - 1, 0, n - 1)
