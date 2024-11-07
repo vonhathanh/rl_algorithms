@@ -58,120 +58,55 @@ def query_sum(tree, li, ri, l, r, i=0):
     mid = (li + ri) // 2
     return query_sum(tree, li, mid, l, r, i*2+1) + query_sum(tree, mid+1, ri, l, r, i*2+2)
 
+def test_init():
+    data = np.array([1, 2, 3, 4, 5])
+    n = len(data)
+    tree = np.zeros(2 * n - 1)
+    init(tree, data, 0, 0, n - 1)
+    # Expected values in tree based on the sum of ranges
+    assert tree[0] == 15, f"Root value incorrect, expected 15 but got {tree[0]}"
+    assert tree[1] == 6, f"Left child of root incorrect, expected 6 but got {tree[1]}"
+    assert tree[2] == 9, f"Right child of root incorrect, expected 9 but got {tree[2]}"
+    print("test_init passed")
 
-def test_init_tree(input, output):
-    tree = np.zeros(len(input) * 4)
-    init(tree, input, 0, 0, len(input) - 1)
-    assert np.all(tree == output)
-    return input, tree
 
-def test_update(input, diff, i):
-    tree = np.zeros(len(input) * 4)
-    init(tree, input, 0, 0, len(input) - 1)
-    prev_sum = np.sum(input)
-    update_tree(tree, input, diff, 0)
-    new_sum = np.sum(input)
+def test_update():
+    data = np.array([1, 2, 3, 4, 5])
+    n = len(data)
+    tree = np.zeros(2 * n - 1)
+    init(tree, data, 0, 0, n - 1)
 
-    assert prev_sum + diff == new_sum
-    assert prev_sum + diff == query_sum(tree, 0, len(input)-1, 0, len(input) - 1, i)
+    # Update data[2] from 3 to 6 (difference of 3)
+    update_tree(tree, data, diff=3, i=2)
 
-def tests():
-    # test with even-length array
-    data, tree = test_init_tree(np.array([1, 3, -2, 8, -7, 3]),
-                                np.array([ 6, 2, 4, 4,-2, 1, 3, 1, 3, 0, 0, 8,-7, 0, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0]))
-    # test update at the start index
-    test_update(data, 3, 0)
-    # new_sum = np.sum(data)
-    # assert new_sum == sum_data - 2
-    # sum_data = new_sum
-    # print(tree)
-    # # test update at the end index
-    # update_tree(tree, data, 3, len(data) - 1)
-    # new_sum = np.sum(data)
-    # assert new_sum == sum_data + 3
-    # sum_data = new_sum
-    # print(tree)
-    # # test update at the middle
-    # update_tree(tree, data, 5, len(data) // 2)
-    # new_sum = np.sum(data)
-    # assert new_sum == sum_data + 5
-    # print(tree)
-    # # test query sum in full range
-    # s = query_sum(tree, 0, len(data)-1, 0, len(data)-1)
-    # assert s == np.sum(data)
-    # # test query sum in single leaf
-    # s = query_sum(tree, 0, len(data) - 1, 0, 0)
-    # assert s == data[0]
-    # # test query sum in single leaf
-    # s = query_sum(tree, 0, len(data) - 1, len(data)-1, len(data)-1)
-    # assert s == data[-1]
-    # # test query sum in random range
-    # s = query_sum(tree, 0, len(data) - 1, 0, 3)
-    # assert s == np.sum(data[0:4])
-    # # test query sum in random range
-    # s = query_sum(tree, 0, len(data) - 1, 2, len(data)-1)
-    # assert s == np.sum(data[2:])
-    #
-    # # test with odd-length array
-    # data = np.array([1, 3, -2, 8, -7])
-    # tree = np.zeros(len(data) * 4)
-    # init(tree, data, 0, 0, len(data) - 1)
-    # sum_data = np.sum(data)
-    # print(tree)
-    # # test update at the start index
-    # update_tree(tree, data, -2, 0)
-    # new_sum = np.sum(data)
-    # assert new_sum == sum_data - 2
-    # sum_data = new_sum
-    # print(tree)
-    # # test update at the end index
-    # update_tree(tree, data, 3, len(data) - 1)
-    # new_sum = np.sum(data)
-    # assert new_sum == sum_data + 3
-    # sum_data = new_sum
-    # print(tree)
-    # # test update at the middle
-    # update_tree(tree, data, 5, len(data) // 2)
-    # new_sum = np.sum(data)
-    # assert new_sum == sum_data + 5
-    # print(tree)
-    #
-    # print(query_sum(tree, 0, 0, len(data) - 1, 0, 3))
-    # # test query sum in full range
-    # print(query_sum(tree, 0, len(data) - 1, 0, len(data) - 1))
-    # # test query sum in single leaf
-    # print(query_sum(tree, 0, len(data) - 1, 0, 0))
-    # # test query sum in single leaf
-    # print(query_sum(tree, 0, len(data) - 1, len(data) - 1, len(data) - 1))
-    # # test query sum in random range
-    # print(query_sum(tree, 0, len(data) - 1, 0, 3))
-    # # test query sum in random range
-    # print(query_sum(tree, 0, len(data) - 1, 2, len(data)))
-    #
-    # # test with array length = 2**n
-    # data = np.array([1, 3, -2, 8, -7, 3, 2, 5])
-    # tree = np.zeros(len(data) * 4)
-    # init(tree, data, 0, 0, len(data) - 1)
-    # print(tree)
-    # # test update at the start index
-    # update_tree(tree, data, -2, 0)
-    # print(tree)
-    # # test update at the end index
-    # update_tree(tree, data, 3, len(data) - 1)
-    # print(tree)
-    # # test update at the middle
-    # update_tree(tree, data, 5, len(data) // 2)
-    # print(tree)
-    # # test query sum in full range
-    # print(query_sum(tree, 0, len(data) - 1, 0, len(data) - 1))
-    # # test query sum in single leaf
-    # print(query_sum(tree, 0, len(data) - 1, 0, 0))
-    # # test query sum in single leaf
-    # print(query_sum(tree, 0, len(data) - 1, len(data) - 1, len(data) - 1))
-    # # test query sum in random range
-    # print(query_sum(tree, 0, len(data) - 1, 0, 3))
-    # # test query sum in random range
-    # print(query_sum(tree, 0, len(data) - 1, 2, len(data)))
+    # After the update, root should reflect the new total
+    assert tree[0] == 18, f"Root value incorrect after update, expected 18 but got {tree[0]}"
+    assert data[2] == 6, f"Data array not updated correctly, expected 6 but got {data[2]}"
+    print("test_update passed")
+
+
+def test_query_sum():
+    data = np.array([1, 2, 3, 4, 5])
+    n = len(data)
+    tree = np.zeros(2 * n - 1)
+    init(tree, data, 0, 0, n - 1)
+
+    # Query full range
+    result = query_sum(tree, 0, n - 1, 0, n - 1)
+    assert result == 15, f"Full range sum incorrect, expected 15 but got {result}"
+
+    # Query partial range
+    result = query_sum(tree, 0, n - 1, 1, 3)
+    assert result == 9, f"Partial range sum incorrect, expected 9 but got {result}"
+
+    # Query single element
+    result = query_sum(tree, 0, n - 1, 2, 2)
+    assert result == 3, f"Single element query incorrect, expected 3 but got {result}"
+
+    print("test_query_sum passed")
+
 
 if __name__ == '__main__':
-    tests()
+    test_init()
+    test_update()
+    test_query_sum()
