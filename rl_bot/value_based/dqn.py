@@ -6,28 +6,11 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
-from torch import nn
 
-from rl_bot.replay_memory import ReplayMemory
+from rl_bot.value_based.mlp_policy import MLPPolicy
+from rl_bot.value_based.replay_memory import ReplayMemory
 from rl_bot.utils import linear_schedule
 
-
-class MLPPolicy(nn.Module):
-    def __init__(self, env: gym.vector.VectorEnv):
-        super().__init__()
-
-        input_dim = np.array(env.single_observation_space.shape).prod()
-
-        output_dim = env.single_action_space.n
-
-        self.net = nn.Sequential(nn.Linear(input_dim, 128),
-                                 nn.ReLU(),
-                                 nn.Linear(128, 128),
-                                 nn.ReLU(),
-                                 nn.Linear(128, output_dim))
-
-    def forward(self, x):
-        return self.net(x)
 
 class DQN:
 
