@@ -6,3 +6,7 @@ def linear_schedule(start_e: float, end_e: float, duration: int, t: int) -> floa
     # t: current timestep in the training loop
     eps_threshold = end_e + (start_e - end_e) * math.exp(-1. * t / duration)
     return eps_threshold
+
+def beta_annealing(start_b: float, end_b: float, duration: int, t: int) -> float:
+    interval = (end_b - start_b) / duration
+    return interval * min(duration, t)

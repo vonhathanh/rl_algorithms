@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import torch
 import random
@@ -65,15 +67,16 @@ class PriporityMemory(ReplayMemory):
 
     def sample(self, batch_size: int):
         segment = self.p_tree.sum() / batch_size
-        indices = np.zeros(batch_size)
+        indices = np.zeros(batch_size, dtype=np.int64)
         weights = np.zeros(batch_size)
 
         for i in range(batch_size):
             upper_bound = random.uniform(segment * i, segment * (i + 1))
-            index = self.p_tree.retrieve(upper_bound)
 
+            index = self.p_tree.retrieve(upper_bound)
             indices[i] = index
-            weights[i] = np.pow(len(self)*self.p_tree[index], self.beta)
+
+            weights[i] = math.pow(len(self)*self.p_tree[index], self.beta)
 
         weights /= weights.max()
 
@@ -86,4 +89,3 @@ class PriporityMemory(ReplayMemory):
             "weights": torch.tensor(weights).to(self.device, dtype=torch.float32),
             "indices": indices
         }
-
