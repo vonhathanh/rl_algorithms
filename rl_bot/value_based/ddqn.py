@@ -12,7 +12,7 @@ from rl_bot.value_based.replay_memory import ReplayMemory
 from rl_bot.utils import linear_schedule
 
 
-class DQN:
+class DDQN:
 
     def __init__(self, env: gym.vector.VectorEnv, args: dict):
         # check if GPU is avaialble
