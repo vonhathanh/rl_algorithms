@@ -56,6 +56,7 @@ class PriporityMemory(ReplayMemory):
             capacity *= 2
         self.p_tree = SumSegmentTree(capacity)
         self.beta = beta
+        self.max_priority = 1.0
 
     def store(self, memory: tuple):
         *m, priority = memory

@@ -142,6 +142,6 @@ if __name__ == '__main__':
 
     envs = gym.make_vec("CartPole-v1", num_envs=args["num_envs"])
 
-    model = DQN(envs, args)
+    model = DDQN(envs, args)
 
     model.train(n_steps=args["n_steps"])

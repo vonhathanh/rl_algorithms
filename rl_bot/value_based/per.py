@@ -129,6 +129,8 @@ class PER:
             indices = data["indices"]
             for i in range(len(indices)):
                 self.replay_memory.p_tree[indices[i]] = td_error[i]
+            max_p = td_error.max()
+            self.replay_memory.max_priority = max_p
 
         # typical backward pass
         loss = F.mse_loss(target, q_values)
@@ -167,6 +169,6 @@ if __name__ == '__main__':
 
     envs = gym.make_vec("CartPole-v1", num_envs=args["num_envs"])
 
-    model = DQN(envs, args)
+    model = PER(envs, args)
 
     model.train(n_steps=args["n_steps"])
