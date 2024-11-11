@@ -122,8 +122,7 @@ class PER:
 
         q_values = torch.gather(self.policy_net(data["states"]), 1, data["actions"].unsqueeze(1)).squeeze(1)
 
-        elementwise_loss = F.smooth_l1_loss(q_values, target, reduction="none")
-
+        elementwise_loss = F.mse_loss(q_values, target, reduction="none")
         # typical backward pass
         loss = torch.mean(elementwise_loss * data["weights"])
         self.optimizer.zero_grad()
@@ -160,7 +159,7 @@ if __name__ == '__main__':
         "log_dir": "../../runs",
         # PER parameters
         "alpha": 0.5,
-        "beta": 0.4,
+        "beta": 0.1,
         "epsilon": 1e-6,
     }
 
