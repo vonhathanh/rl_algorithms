@@ -1,7 +1,8 @@
 import numpy as np
 import torch
+import random
 
-from rl_bot.segment_tree import *
+from rl_bot.value_based.segment_tree import SumSegmentTree
 
 
 class ReplayMemory:
@@ -47,43 +48,41 @@ class PriporityMemory(ReplayMemory):
     Priority Memory implementation of the paper: PRIORITIZED EXPERIENCE REPLAY
     This version uses sum tree (segment tree) as in the paper reference
     """
-    def __init__(self, size: int, observation_dim: tuple, device):
+    def __init__(self, size: int, observation_dim: tuple, device: str, beta: float):
         super().__init__(size, observation_dim, device)
-        self.priorities = np.zeros(size)
-        self.sum_tree = np.zeros(size*4)
-        init(self.sum_tree, self.priorities, 0, size-1)
+        # tree capacity must be power of 2
+        capacity = 1
+        while capacity < size:
+            capacity *= 2
+        self.p_tree = SumSegmentTree(capacity)
+        self.beta = beta
 
     def store(self, memory: tuple):
         *m, priority = memory
-        update_tree(self.sum_tree, self.priorities, priority - self.priorities[self.ptr], self.ptr)
+        self.p_tree[self.ptr] = priority
         super().store(m)
 
     def sample(self, batch_size: int):
-        pass
+        segment = self.p_tree.sum() / batch_size
+        indices = np.zeros(batch_size)
+        weights = np.zeros(batch_size)
 
+        for i in range(batch_size):
+            upper_bound = random.uniform(segment * i, segment * (i + 1))
+            index = self.p_tree.retrieve(upper_bound)
 
-if __name__ == '__main__':
-    # test PriporityMemory
-    obs_shape = (4, 1)
-    size = 3
-    m = PriporityMemory(size, obs_shape, "cpu")
-    print(m.sum_tree)
-    print(m.priorities)
+            indices[i] = index
+            weights[i] = np.pow(len(self)*self.p_tree[index], self.beta)
 
-    state = np.zeros(obs_shape)
+        weights /= weights.max()
 
-    m.store((state, np.float32(0), np.float32(0), state, np.int64(0), 10))
-    print(m.sum_tree)
-    print(m.priorities)
+        return {
+            "states": torch.tensor(self.states[indices]).to(self.device, dtype=torch.float32),
+            "actions": torch.tensor(self.actions[indices]).to(self.device, dtype=torch.int64),
+            "rewards": torch.tensor(self.rewards[indices]).to(self.device, dtype=torch.float32),
+            "next_states": torch.tensor(self.next_states[indices]).to(self.device, dtype=torch.float32),
+            "dones": torch.tensor(self.dones[indices]).to(self.device, dtype=torch.float32),
+            "weights": torch.tensor(weights).to(self.device, dtype=torch.float32),
+            "indices": indices
+        }
 
-    m.store((state, np.float32(0), np.float32(0), state, np.int64(5), -15))
-    print(m.sum_tree)
-    print(m.priorities)
-
-    m.store((state, np.float32(0), np.float32(0), state, np.int64(5), -3))
-    print(m.sum_tree)
-    print(m.priorities)
-
-    m.store((state, np.float32(0), np.float32(0), state, np.int64(5), -4))
-    print(m.sum_tree)
-    print(m.priorities)

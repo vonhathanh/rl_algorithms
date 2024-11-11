@@ -106,6 +106,16 @@ class SumSegmentTree(SegmentTree):
         """Returns arr[start] + ... + arr[end]"""
         return super(SumSegmentTree, self).reduce(start, end)
 
+    def retrieve(self, val):
+        idx = 1
+        while idx < self._capacity:
+            if self._value[2 * idx] >= val:
+                idx = 2 * idx
+            else:
+                val -= self._value[2 * idx]
+                idx = 2 * idx + 1
+        return idx - self._capacity
+
     def find_prefixsum_idx(self, prefixsum):
         """Find the highest index `i` in the array such that
             sum(arr[0] + arr[1] + ... + arr[i - i]) <= prefixsum
@@ -147,3 +157,11 @@ class MinSegmentTree(SegmentTree):
         """Returns min(arr[start], ...,  arr[end])"""
 
         return super(MinSegmentTree, self).reduce(start, end)
+
+if __name__ == '__main__':
+    t = SumSegmentTree(8)
+    a = [9, 1, 2, 3, 4]
+    for i in range(0, len(a)):
+        t[i] = a[i]
+    print(t._value, t.sum())
+    print(t.retrieve(8))
