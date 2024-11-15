@@ -42,11 +42,11 @@ and potentially very complex, state-dependent change in policy over multiple tim
 - noisy net: phi = mu + sigma * epsilon (element-wise mul), mu and sigma are learnable params, epsilon is a 
 zero-mean vector of noise with fixed statistics
 - we replace the normal linear layer wx+b by:
-![alt text](image.png)
+![alt text](images/image.png)
 - all of this operations are just affine transformation (element-wise mul and addition)
 - they use factorised Gaussian: p unit of Gaussian vars epsilon_i for input noises and q unit Gaussian noise
 for outputs (total = p + q vars)
-![alt text](image-1.png)
+![alt text](images/image-1.png)
 - fc layers of value net are parameterised as a noisy net, parameters are drawn from the noisy net param distribution
-![alt text](image-2.png)
+![alt text](images/image-2.png)
 - note the different noise used in two networks: avoid bias
