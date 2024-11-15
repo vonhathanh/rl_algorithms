@@ -1,5 +1,7 @@
 import math
 
+from torch import nn
+
 
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int) -> float:
     # linearly reduce espilon from start_e to end_e in "duration" timestep
@@ -10,3 +12,8 @@ def linear_schedule(start_e: float, end_e: float, duration: int, t: int) -> floa
 def beta_annealing(start_b: float, end_b: float, duration: int, t: int) -> float:
     interval = (end_b - start_b) / duration
     return interval * min(duration, t)
+
+def init_uniformly(layer: nn.Linear, init_w: float=3e-3):
+    """Initialize the weights and bias uniformly in [-init_w, init_w]."""
+    layer.weight.data.uniform_(-init_w, init_w)
+    layer.bias.data.uniform_(-init_w, init_w)
