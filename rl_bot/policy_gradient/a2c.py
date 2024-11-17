@@ -84,9 +84,13 @@ class A2C:
         selected_action = dist.mean if self.is_test else action
 
         if not self.is_test:
+            # we want the log_prob to contribute to the gradient of policy loss,
+            # so we don't detach the log_prob
             log_prob = dist.log_prob(selected_action).sum(dim=-1)
             self.transition = [state, log_prob]
-
+        # detach the select_action operation from the computational graph
+        # env need action to sample data/state, its like we select a sample from training set
+        # this operation don't need to be in the computational graph
         return selected_action.clamp(-2.0, 2.0).cpu().detach().numpy()
 
     def step(self, action):
@@ -128,11 +132,13 @@ class A2C:
 
         for i in range(1, n_steps+1):
             action = self.select_action(state)
+
             next_state, reward, done = self.step(action)
 
             actor_loss, critic_loss = self.update_model()
 
             state = next_state
+
             score += reward
 
             if i % self.args["plotting_interval"] == 0:
