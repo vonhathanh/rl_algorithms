@@ -4,12 +4,12 @@ import numpy as np
 import torch
 import random
 
-from rl_bot.value_based.segment_tree import SumSegmentTree
+from rl_bot.segment_tree import SumSegmentTree
 
 
 class ReplayMemory:
 
-    def __init__(self, size: int, observation_dim: tuple, device):
+    def __init__(self, size: int, observation_dim: tuple, device: str = "cpu"):
         self.states = np.zeros((size, *observation_dim))
         self.actions = np.zeros(size)
         self.rewards = np.zeros(size)
@@ -50,7 +50,7 @@ class PriporityMemory(ReplayMemory):
     Priority Memory implementation of the paper: PRIORITIZED EXPERIENCE REPLAY
     This version uses sum tree (segment tree) as in the paper reference
     """
-    def __init__(self, size: int, observation_dim: tuple, device: str, beta: float):
+    def __init__(self, size: int, observation_dim: tuple, device: str = "cpu", beta: float=0.0):
         super().__init__(size, observation_dim, device)
         # tree capacity must be power of 2
         capacity = 1

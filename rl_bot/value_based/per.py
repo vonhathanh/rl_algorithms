@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from rl_bot.utils import linear_schedule, beta_annealing
 from rl_bot.value_based.mlp_policy import MLPPolicy
-from rl_bot.value_based.replay_memory import PriporityMemory
+from rl_bot.replay_memory import PriporityMemory
 
 
 class PER:

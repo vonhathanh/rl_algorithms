@@ -8,7 +8,7 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 
 from rl_bot.value_based.mlp_policy import MLPPolicy
-from rl_bot.value_based.replay_memory import ReplayMemory
+from rl_bot.replay_memory import ReplayMemory
 from rl_bot.utils import linear_schedule
 
 
