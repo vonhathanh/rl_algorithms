@@ -35,8 +35,11 @@ class ReplayMemory:
     def __len__(self) -> int:
         return self.curr_size
 
-    def sample(self, batch_size: int):
-        indices = np.random.choice(self.curr_size, batch_size, replace=False)
+    def sample(self, batch_size: int, is_rand=True):
+        if is_rand:
+            indices = np.random.choice(self.curr_size, batch_size, replace=False)
+        else:
+            indices = range(0, batch_size)
         return {
             "states": torch.tensor(self.states[indices]).to(self.device, dtype=torch.float32),
             "actions": torch.tensor(self.actions[indices]).to(self.device, dtype=torch.int64),
@@ -44,6 +47,12 @@ class ReplayMemory:
             "next_states": torch.tensor(self.next_states[indices]).to(self.device, dtype=torch.float32),
             "dones": torch.tensor(self.dones[indices]).to(self.device, dtype=torch.float32)
         }
+
+    def clear(self):
+        # we don't actually clear the underlying data as it's not necessary atm,
+        # just reset the ptr and curr_size is enough
+        self.ptr = 0
+        self.curr_size = 0
 
 class PriporityMemory(ReplayMemory):
     """

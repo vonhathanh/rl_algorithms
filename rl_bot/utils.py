@@ -17,3 +17,8 @@ def init_uniformly(layer: nn.Linear, init_w: float=3e-3):
     """Initialize the weights and bias uniformly in [-init_w, init_w]."""
     layer.weight.data.uniform_(-init_w, init_w)
     layer.bias.data.uniform_(-init_w, init_w)
+
+def set_init(layers):
+    for l in layers:
+        nn.init.normal_(l.weight, mean=0, std=0.1)
+        nn.init.constant_(l.bias, 0.)
