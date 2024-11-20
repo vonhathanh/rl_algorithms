@@ -18,9 +18,9 @@ class A3C(nn.Module):
         super(A3C, self).__init__()
         self.args = args
 
-        self.actor_layer = nn.Linear(obs_dim, 128)
-        self.mu_layer = nn.Linear(128, action_dim)
-        self.sigma_layer = nn.Linear(128, action_dim)
+        self.actor_layer = nn.Linear(obs_dim, 200)
+        self.mu_layer = nn.Linear(200, action_dim)
+        self.sigma_layer = nn.Linear(200, action_dim)
 
         self.critic_layer = nn.Linear(obs_dim, 128)
         self.value_layer = nn.Linear(128, 1)
@@ -52,7 +52,7 @@ class A3C(nn.Module):
         log_prob = dist.log_prob(action.squeeze(-1))
         entropy = 0.5 + 0.5*math.log(2*math.pi) + torch.log(dist.scale)
 
-        policy_loss = -(log_prob * td.detach() + 0.005*entropy)
+        policy_loss = -log_prob * td.detach() + 0.005*entropy
 
         total_loss = (critic_loss + policy_loss).mean()
 
@@ -68,14 +68,15 @@ class Worker(mp.Process):
         self.gnet, self.opt = gnet, optimizer
         self.env = gym.make(self.args["env_id"])
         self.net = A3C(gnet.args, self.env.observation_space.shape[0], self.env.action_space.shape[0])
+        self.net.load_state_dict(self.gnet.state_dict())
 
     def run(self):
         step = 1
+        max_t = self.args["max_t"]
         while self.g_ep.value < self.args["n_steps"]:
             state, _ = self.env.reset()
             states, actions, rewards = [], [], []
             episode_reward = 0.0
-            max_t = self.args["max_t"]
 
             for i in range(max_t):
                 action = self.net.select_action(state)
@@ -84,15 +85,17 @@ class Worker(mp.Process):
                 done = terminated or truncated or i == max_t - 1
 
                 episode_reward += reward
+
                 actions.append(action)
                 states.append(state)
-                rewards.append((reward + 8.1)/8.1)
+                rewards.append(max(min(reward, 1), -1))
 
                 if step % self.args["update_global_net_interval"] == 0 or done:
                     push_and_pull(self.opt, self.net, self.gnet, done, next_state, states, actions, rewards, self.args["gamma"])
                     states, actions, rewards = [], [], []
                     if done:
                         record(self.g_ep, self.g_ep_r, episode_reward, self.res_queue, self.name)
+                        break
 
                 state = next_state
                 step += 1
@@ -102,7 +105,7 @@ def push_and_pull(opt, lnet, gnet, done, next_state, states, actions, rewards, g
     if done:
         value = 0.0
     else:
-        value = lnet.forward(torch.tensor(next_state))[-1]
+        value = lnet.forward(torch.tensor(next_state))[-1].detach().numpy()[0]
 
     v_targers = []
     for r in rewards[::-1]:
@@ -110,12 +113,15 @@ def push_and_pull(opt, lnet, gnet, done, next_state, states, actions, rewards, g
         v_targers.append(value)
     v_targers.reverse()
 
-    loss = lnet.loss(torch.tensor(np.array(states)), torch.tensor(np.array(actions)), torch.tensor(v_targers))
+    loss = lnet.loss(torch.tensor(np.array(states)),
+                     torch.tensor(np.array(actions)),
+                     torch.tensor(np.array(v_targers)))
 
     opt.zero_grad()
     loss.backward()
+    torch.nn.utils.clip_grad_norm(lnet.parameters(), 20)
     for lp, gp in zip(lnet.parameters(), gnet.parameters()):
-        gp._grad = lp._grad
+        gp._grad = lp.grad
     opt.step()
 
     lnet.load_state_dict(gnet.state_dict())
@@ -142,7 +148,7 @@ if __name__ == '__main__':
         "max_t": 200,
         "num_workers": 5,
         "plotting_interval": 100,
-        "update_global_net_interval": 5,
+        "update_global_net_interval": 10,
         "log_dir": "../../runs",
         "checkpoint": "../../models/pendulum/"
     }

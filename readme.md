@@ -50,3 +50,7 @@ for outputs (total = p + q vars)
 - fc layers of value net are parameterised as a noisy net, parameters are drawn from the noisy net param distribution
 ![alt text](images/image-2.png)
 - note the different noise used in two networks: avoid bias
+
+## PPO
+
+- 

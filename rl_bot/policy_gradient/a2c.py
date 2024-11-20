@@ -114,6 +114,10 @@ class A2C:
         self.critic_optimizer.step()
 
         advantage = (target - pred_value).detach()
+        # log_prob is ranging from (0, -infinity)
+        # if action a has prob = 0.5, a is good, we want to increase it
+        # -> log(0.5) = -0.69, we want to increase -0.6 to -0.5, -0.4, ...
+        # that would increase the loss we put a negavive sign here
         policy_loss = -advantage * log_prob
         policy_loss += self.args["entropy_weight"] * -log_prob
 
@@ -215,7 +219,7 @@ if __name__ == '__main__':
         "env_id": "Pendulum-v1",
         "gamma": 0.9,
         "entropy_weight": 1e-2,
-        "seed": 1993,
+        "seed": 777,
         "n_steps": 100000,
         "plotting_interval": 100,
         "log_dir": "../../runs",
