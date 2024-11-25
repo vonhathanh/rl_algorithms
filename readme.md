@@ -53,4 +53,13 @@ for outputs (total = p + q vars)
 
 ## PPO
 
-- 
+- Optimize multiple steps of policy gradient loss using the same trajectory is not well-justified, empricially
+leads to destructive large policy updates
+- TRPO: maximize a surrogate objective function subject to a constraint of the size of policy update
+![img.png](images/img_3.png)
+- We can rewrite TRPO to solving the unconstrained optimization problems
+![img_1.png](images/img_4.png)
+- Certain surrogate objective forms a lower bound on the performance of policy
+- Choose beta is hard, experiments showed
+- PPO: modify the objective, penalize changes to the policy that move r(theta) away from 1
+![img_2.png](images/img_5.png)
