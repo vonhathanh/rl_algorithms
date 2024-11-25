@@ -223,7 +223,7 @@ if __name__ == '__main__':
         "n_steps": 100000,
         "plotting_interval": 100,
         "log_dir": "../../runs",
-        "checkpoint": "../../models/pendulum/"
+        "checkpoint": "../../models/pendulum/a2c/"
     }
 
     random.seed(args["seed"])
