@@ -52,6 +52,7 @@ class DDPG:
         )
 
         self.n_steps = args["n_steps"]
+        self.random_steps = args["random_steps"]
         self.batch_size = args["batch_size"]
         self.gamma = args["gamma"]
         self.tau = args["tau"]
@@ -73,8 +74,8 @@ class DDPG:
         self.critic_t.load_state_dict(self.critic.state_dict())
 
         # optimizers
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=args["lr"])
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=args["lr"])
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-3)
 
         self.noise = OUNoise(action_dim, theta=args["ou_noise_theta"], sigma=args["ou_noise_sigma"])
         self.is_test = False
@@ -82,7 +83,10 @@ class DDPG:
         self.writer = SummaryWriter(args["log_dir"])
 
     def select_action(self, state):
-        action = self.actor(torch.tensor(state, device=self.device)).detach().cpu().numpy()
+        if not self.is_test and len(self.memory) < self.random_steps:
+            action = self.env.action_space.sample()
+        else:
+            action = self.actor(torch.tensor(state, device=self.device)).detach().cpu().numpy()
 
         if not self.is_test:
             noise = self.noise.sample()
@@ -121,7 +125,7 @@ class DDPG:
 
 
     def update_model(self):
-        if len(self.memory) < self.batch_size:
+        if len(self.memory) < self.batch_size or len(self.memory) < self.random_steps:
             return 0.0, 0.0
         data = self.memory.sample(self.batch_size)
         states = data["states"]
@@ -177,6 +181,7 @@ if __name__ == '__main__':
         "ou_noise_theta": 1.0,
         "ou_noise_sigma": 0.1,
         "n_steps": 100000,
+        "random_steps": 10000,
         "log_frequency": 10,
         "log_dir": "../../runs"
     }
