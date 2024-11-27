@@ -21,9 +21,9 @@ class ReplayMemory:
         self.size, self.curr_size = size, 0
 
     def store(self, memory: tuple):
-        states, action, reward, next_state, done = memory
+        state, action, reward, next_state, done = memory
 
-        self.states[self.ptr] = states
+        self.states[self.ptr] = state
         self.actions[self.ptr] = action
         self.rewards[self.ptr] = reward
         self.next_states[self.ptr] = next_state
