@@ -198,15 +198,17 @@ class PPOAgent:
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=0.005)
 
         # memory for training
-        self.states: list[torch.Tensor] = []
-        self.actions: list[torch.Tensor] = []
-        self.rewards: list[torch.Tensor] = []
-        self.values: list[torch.Tensor] = []
-        self.masks: list[torch.Tensor] = []
-        self.log_probs: list[torch.Tensor] = []
+        self.states: list = [None] * self.rollout_len
+        self.actions: list = [None] * self.rollout_len
+        self.rewards: list = [None] * self.rollout_len
+        self.values: list = [None] * self.rollout_len
+        self.masks: list = [None] * self.rollout_len
+        self.log_probs: list = [None] * self.rollout_len
 
         # total steps count
         self.total_step = 1
+        # current index in the memory
+        self.idx = 0
 
         # mode: train / test
         self.is_test = False
@@ -221,10 +223,10 @@ class PPOAgent:
 
         if not self.is_test:
             value = self.critic(state)
-            self.states.append(state)
-            self.actions.append(selected_action)
-            self.values.append(value)
-            self.log_probs.append(dist.log_prob(selected_action))
+            self.states[self.idx] = state
+            self.actions[self.idx] = selected_action
+            self.values[self.idx] = value
+            self.log_probs[self.idx] = dist.log_prob(selected_action)
 
         return selected_action.cpu().detach().numpy()
 
@@ -237,8 +239,8 @@ class PPOAgent:
         done = np.reshape(done, (1, -1))
 
         if not self.is_test:
-            self.rewards.append(torch.FloatTensor(reward).to(self.device))
-            self.masks.append(torch.FloatTensor(1 - done).to(self.device))
+            self.rewards[self.idx] = torch.FloatTensor(reward).to(self.device)
+            self.masks[self.idx] = torch.FloatTensor(1 - done).to(self.device)
 
         return next_state, reward, done
 
@@ -285,16 +287,16 @@ class PPOAgent:
             ratio = (log_prob - old_log_prob).exp()
 
             # actor_loss
-            surr_loss = ratio * adv
-            clipped_surr_loss = (
-                    torch.clamp(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon) * adv
-            )
+            # surr_loss = ratio * adv
+            # clipped_surr_loss = (
+            #         torch.clamp(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon) * adv
+            # )
 
             # entropy
             entropy = dist.entropy().mean()
 
             actor_loss = (
-                    -torch.min(surr_loss, clipped_surr_loss).mean()
+                    -torch.min(ratio * adv, torch.clamp(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon) * adv).mean()
                     - entropy * self.entropy_weight
             )
 
@@ -315,9 +317,6 @@ class PPOAgent:
 
             actor_losses.append(actor_loss.item())
             critic_losses.append(critic_loss.item())
-
-        self.states, self.actions, self.rewards = [], [], []
-        self.values, self.masks, self.log_probs = [], [], []
 
         actor_loss = sum(actor_losses) / len(actor_losses)
         critic_loss = sum(critic_losses) / len(critic_losses)
@@ -349,6 +348,8 @@ class PPOAgent:
                     state = np.expand_dims(state, axis=0)
                     scores.append(score)
                     score = 0
+
+                self.idx = (self.idx + 1) % self.rollout_len
 
             actor_loss, critic_loss = self.update_model(next_state)
             """Plot the training progresses."""
@@ -382,31 +383,6 @@ class PPOAgent:
         self.env.close()
 
         return frames
-
-    def _plot(
-            self,
-            frame_idx: int,
-            scores: list[float],
-            actor_losses: list[float],
-            critic_losses: list[float],
-    ):
-        """Plot the training progresses."""
-
-        def subplot(loc: int, title: str, values: list[float]):
-            plt.subplot(loc)
-            plt.title(title)
-            plt.plot(values)
-
-        subplot_params = [
-            (131, f"frame {frame_idx}. score: {np.mean(scores[-10:])}", scores),
-            (132, "actor_loss", actor_losses),
-            (133, "critic_loss", critic_losses),
-        ]
-
-        plt.figure(figsize=(30, 5))
-        for loc, title, values in subplot_params:
-            subplot(loc, title, values)
-        plt.show()
 
 
 # environment

@@ -63,3 +63,26 @@ leads to destructive large policy updates
 - Choose beta is hard, experiments showed
 - PPO: modify the objective, penalize changes to the policy that move r(theta) away from 1
 ![img_2.png](images/img_5.png)
+
+## TD3
+
+- Overestimation bias and the accumulation of error in temporal difference methods are present in an actor-critic setting
+- This inaccuracy is further exaggerated by the nature of temporal difference learning
+- Estimate of the value function is updated using the estimate of a subsequent state
+- Using an imprecise estimate within each update will lead to an accumulation of error.
+- DDQN is ineffective against actor-critic setting due to slow-changing policy -> current and target
+value estimates remain too similar
+- Use Double Q-learning to deal with this problem: using a pair of independently trained critics
+- Unbiased estimate with high variance can still lead to future overestimations in local regions of state space
+- Propose Clipped Double Q-learning: value estimate suffering from overestimation bias can be used as an 
+approximate upper-bound to the true value estimate -> favors underestimations, do not tend to be propagated during learning,
+as actions with low value estimates are avoided by the policy
+
+### Overestimation Bias in Actor-Critic
+
+- Policy is updated with respect to the value estimates of an approximate critic
+- overestimation may be minimal with each update, the presence of error raises two concerns:
+  - may develop into a more significant bias over many updates if left unchecked
+  - inaccurate value estimate may lead to poor policy updates
+- Double Q learning: greedy update is disentangled from the value function by maintaining two separate value estimates
+- Use a pair of actors (pi1, pi2) and critics (q1, q2)

@@ -106,6 +106,8 @@ class PPO:
         )
         self.env = env
         self.args = args
+        self.epoch = 64
+        self.epsilon = self.args["epsilon"]
 
         obs_dim = env.observation_space.shape[0]
         action_dim = env.action_space.shape[0]
@@ -166,7 +168,7 @@ class PPO:
                 action = self.select_action(state)
                 next_state, reward, done = self.step(action)
 
-                score += reward
+                score += reward[0][0]
 
                 if done[0][0]:
                     state, _ = self.env.reset()
@@ -175,7 +177,7 @@ class PPO:
                     score = 0
                 else:
                     state = next_state
-            print(f"step {i=}, score={np.mean(scores)=}")
+            print(f"step {i=}, score={np.mean(scores)}")
             self.update_model(torch.tensor(next_state).to(self.device))
 
 
@@ -189,34 +191,35 @@ class PPO:
         self.values = torch.cat(self.values).detach()
         self.log_probs = torch.cat(self.log_probs).detach()
         advantages = returns - self.values
-        for _ in range(self.args["rollout_len"] // self.args["batch_size"]):
-            indices = np.random.choice(self.args["rollout_len"], self.args["batch_size"])
-            states = self.states[indices, :]
-            return_ = returns[indices]
-            actions = self.actions[indices]
-            log_probs = self.log_probs[indices]
-            adv = advantages[indices]
+        for _ in range(self.epoch):
+            for _ in range(self.args["rollout_len"] // self.args["batch_size"]):
+                indices = np.random.choice(self.args["rollout_len"], self.args["batch_size"])
+                states = self.states[indices, :]
+                return_ = returns[indices]
+                actions = self.actions[indices]
+                log_probs = self.log_probs[indices]
+                adv = advantages[indices]
 
-            new_values = self.critic(states)
-            value_loss = (new_values - return_).pow(2).mean()
+                new_values = self.critic(states)
+                value_loss = (new_values - return_).pow(2).mean()
 
-            _, new_dists = self.actor(states)
-            new_log_probs = new_dists.log_prob(actions)
-            entropy = new_dists.entropy().mean()
-            ratio = (new_log_probs - log_probs).exp()
+                _, new_dists = self.actor(states)
+                new_log_probs = new_dists.log_prob(actions)
+                entropy = new_dists.entropy().mean()
+                ratio = (new_log_probs - log_probs).exp()
 
-            # entropy
-            policy_loss = -torch.min(ratio * adv, torch.clamp(ratio, 1 - self.args["epsilon"],
-                                                              1 + self.args["epsilon"]) * adv).mean() - (
-                                      entropy * 0.005)
+                # entropy
+                policy_loss = -torch.min(ratio * adv, torch.clamp(ratio, 1 - self.epsilon,
+                                                                  1 + self.epsilon) * adv).mean() - (
+                                          entropy * 0.005)
 
-            self.critic_optimizer.zero_grad()
-            value_loss.backward(retain_graph=True)
-            self.critic_optimizer.step()
+                self.critic_optimizer.zero_grad()
+                value_loss.backward(retain_graph=True)
+                self.critic_optimizer.step()
 
-            self.actor_optimizer.zero_grad()
-            policy_loss.backward()
-            self.actor_optimizer.step()
+                self.actor_optimizer.zero_grad()
+                policy_loss.backward()
+                self.actor_optimizer.step()
 
         self.states = []
         self.actions = []
