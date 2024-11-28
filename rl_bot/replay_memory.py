@@ -42,7 +42,7 @@ class ReplayMemory:
             indices = range(0, batch_size)
         return {
             "states": torch.tensor(self.states[indices]).to(self.device, dtype=torch.float32),
-            "actions": torch.tensor(self.actions[indices]).to(self.device, dtype=torch.int64),
+            "actions": torch.tensor(self.actions[indices]).to(self.device, dtype=torch.float32),
             "rewards": torch.tensor(self.rewards[indices]).to(self.device, dtype=torch.float32),
             "next_states": torch.tensor(self.next_states[indices]).to(self.device, dtype=torch.float32),
             "dones": torch.tensor(self.dones[indices]).to(self.device, dtype=torch.float32)
