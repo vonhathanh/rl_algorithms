@@ -106,7 +106,7 @@ class DQN:
             # else r_j + gamma*q_targets
             target = data["rewards"] + self.args["gamma"] * q_targets * (1 - data["dones"])
 
-        q_values = torch.gather(self.policy_net(data["states"]), 1, data["actions"].unsqueeze(1)).squeeze(1)
+        q_values = torch.gather(self.policy_net(data["states"]), 1, data["actions"].unsqueeze(1).long()).squeeze(1)
 
         # typical backward pass
         loss = F.mse_loss(target, q_values)
