@@ -86,3 +86,23 @@ as actions with low value estimates are avoided by the policy
   - inaccurate value estimate may lead to poor policy updates
 - Double Q learning: greedy update is disentangled from the value function by maintaining two separate value estimates
 - Use a pair of actors (pi1, pi2) and critics (q1, q2)
+
+## Target Networks and Delayed Policy Updates
+
+- Stable target reduces the growth of error, provide a stable objective in the learning procedure
+- Without a fixed target, each update may leave residual error which will begin to accumulate
+- Fixed policy + slow updating target network -> stable learning process of value network
+![img.png](img.png)
+- Divergence that occurs without target networks is the result of policy updates with a high variance value estimate
+- If target networks can be used to reduce the error over multiple updates, and policy updates on high-error states cause
+divergent behavior, then the policy network should be updated at a lower frequency than the value network
+-> Delaying policy updates until the value error is as small as possible
+
+## Target Policy Smoothing Regularization
+
+- Deterministic policies can overfit to narrow peaks in the value estimate
+- Update the critic with a learning target using a deterministic policy increase the variance of the target
+-> We need regularization
+- Enforce similar actions should have similar value
+- Fitting the value of a small area around the target action
+-> Adding a small noise
