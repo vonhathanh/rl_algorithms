@@ -6,6 +6,32 @@ import gymnasium as gym
 import random
 from collections import namedtuple, deque
 
+"""
+Architecture:
+- Similar to Ape-X
+- Use prioritized exp replay + distributed training
+- n-step double Q-learning (n=5)
+- 256 actors, 1 learner
+- Use dueling network architecture of Wang et al (2016)
+- An LSTM layer after the convolutional stack, similar to Gruslys
+- Store fixed-length (m=80) sequences of (s, a, r) in replay instead of (s, a, r, s')
+- Adjcent sequences overlapping each other by 40 time steps (never crossing episode boundary)
+- Have online + target network, unroll both of them in training on the same sequence
+- No clipped reward, use invertible value function of the form 
+  h(x) = sign(x)(sqrt(abs(x) + 1) - 1) + epsilon*x
+- a* = argmax(a, Q_online(s_t+n, a)
+- Replay buffer use a mixture of max and mean absolute n-step TD-errors delta_i over the sequence:
+  p = eta*max(delta_i) + (1-eta)*mean_delta. eta and priority exponent = 0.9
+- This agressive scheme is motivated by observation that averaging over
+  long sequences tends to wash out large errors -> compressing the priorities range
+  
+Training:
+- Stored state: Storing the recurrent state in replay and using it to initialize the network at training time
+  remedies the weakness of the zero start state strategy but suffers from 
+  "representational drift and recurrent state staleness"
+- Burn-in: Using a portion of the replay sequence to init the hidden state, and update the net only on
+  the remaining part of the sequence
+"""
 
 # Prioritized Experience Replay Buffer
 class PrioritizedReplayBuffer:

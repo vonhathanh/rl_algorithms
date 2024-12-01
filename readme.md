@@ -87,7 +87,7 @@ as actions with low value estimates are avoided by the policy
 - Double Q learning: greedy update is disentangled from the value function by maintaining two separate value estimates
 - Use a pair of actors (pi1, pi2) and critics (q1, q2)
 
-## Target Networks and Delayed Policy Updates
+### Target Networks and Delayed Policy Updates
 
 - Stable target reduces the growth of error, provide a stable objective in the learning procedure
 - Without a fixed target, each update may leave residual error which will begin to accumulate
@@ -98,7 +98,7 @@ as actions with low value estimates are avoided by the policy
 divergent behavior, then the policy network should be updated at a lower frequency than the value network
 -> Delaying policy updates until the value error is as small as possible
 
-## Target Policy Smoothing Regularization
+### Target Policy Smoothing Regularization
 
 - Deterministic policies can overfit to narrow peaks in the value estimate
 - Update the critic with a learning target using a deterministic policy increase the variance of the target
@@ -106,3 +106,31 @@ divergent behavior, then the policy network should be updated at a lower frequen
 - Enforce similar actions should have similar value
 - Fitting the value of a small area around the target action
 -> Adding a small noise
+
+# R2D2
+
+- Built upon prioritized distributed replay and n-step double Q-learning (n=5)
+- Generate experiences by a large number of actors (n=256) and learning from batches of exp by a single learner
+- Store fixed-length (n=80) sequences of (s, a, r), adjacent sequences overlapping each other by 40 time steps, never crossing episode boundaries
+- In training, unroll both online and target networks on the same sequence of states to generate value estimates and targets
+- Uses an invertible value fn rescaling of the form h(x) = sign(x)(sqrt(abs(x+1) - 1)) + epsilon*x
+- In order to achieve good performance in a partially observed environment, an RL agent requires
+a state representation that encodes information about its state-action trajectory in addition to its
+current observation
+- Most common way is to use an RNN, as part of the agent's state encoding
+- To train RNN to learn meaningful long-term dependencies, whole state-action trajectories need to be stored in replay buffer
+- Training strategy: using a zero start state to initialize the network at the beginning of sampled sequences:
+    - allows independent decorrelated sampling of relatively short sequences
+    - it forces the RNN to learn to recover meaningful predictions from an atypical initial recurrent state
+    - may limit its ability to fully rely on its recurrent state and learn to exploit long temporal correlations
+- Representational Drift: learned representations of states produced by the recurrent neural network (RNN) evolve during training because network parameters change as it learns
+-> Same input state to be represented differently at different points in training
+-> Q-value predictions no longer align well with current policy or value fn
+- Solution: maintaining a fixed target network (q-network)
+- Burn-in: process a sequence of states preceding a relayed exp to warm up it's hidden state to match the context at the time the exp occurred
+
+- Recurrent State Staleness: RNNs maintain hidden states that depend on a sequence of observations
+    - With exp replay, the hidden states at the time an exp was collected are not stored in the buffer
+    - During training, RNN must recreate them by reprocessing the sequence of observations but it not perfectly replicate the original hidden states due to network params change
+Solution: Burn-in: to recreate a hidden state close to what it would have been during the original experience collection
+- trains on sequences of experiences to preserve temporal context instead of training on individual transitions
