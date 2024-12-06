@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import random
 
-from rl_bot.segment_tree import SumSegmentTree
+from rl_algorithms.segment_tree import SumSegmentTree
 
 
 class ReplayMemory:

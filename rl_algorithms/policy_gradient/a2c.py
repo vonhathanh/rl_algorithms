@@ -10,7 +10,7 @@ from torch import nn, optim
 from torch.distributions import Normal
 from torch.utils.tensorboard import SummaryWriter
 
-from rl_bot.utils import init_uniformly
+from rl_algorithms.utils import init_uniformly
 
 
 class Actor(nn.Module):

@@ -6,10 +6,10 @@ import torch.nn.functional as F
 from torch import nn, optim
 from torch.utils.tensorboard import SummaryWriter
 
-from rl_bot.action_normalizer import ActionNormalizer
-from rl_bot.ou_noise import OUNoise
-from rl_bot.replay_memory import ReplayMemory
-from rl_bot.utils import init_uniformly
+from rl_algorithms.action_normalizer import ActionNormalizer
+from rl_algorithms.ou_noise import OUNoise
+from rl_algorithms.replay_memory import ReplayMemory
+from rl_algorithms.utils import init_uniformly
 
 
 class Actor(nn.Module):
@@ -30,18 +30,33 @@ class Critic(nn.Module):
     def __init__(self, in_dim: int, out_dim: int=1):
         super(Critic, self).__init__()
         self.hidden_1 = nn.Linear(in_dim, 64)
-        self.out = nn.Linear(64, out_dim)
-        init_uniformly(self.out)
+        self.q1 = nn.Linear(64, out_dim)
+
+        self.hidden_2 = nn.Linear(in_dim, 64)
+        self.q2 = nn.Linear(64, out_dim)
+        init_uniformly(self.q2)
 
     def forward(self, state, action):
         x = torch.cat((state, action), dim=-1)
-        x = F.relu(self.hidden_1(x))
-        out = self.out(x)
 
-        return out
+        hidden_1 = F.relu(self.hidden_1(x))
+        q1 = self.q1(hidden_1)
+
+        hidden_2 = F.relu(self.hidden_2(x))
+        q2 = self.q2(hidden_2)
+
+        return q1, q2
+
+    def Q1(self, state, action):
+        x = torch.cat((state, action), dim=-1)
+
+        hidden_1 = F.relu(self.hidden_1(x))
+        q1 = self.q1(hidden_1)
+
+        return q1
 
 
-class DDPG:
+class TD3:
     def __init__(self, env: gym.Env, args):
         self.env = env
 
@@ -53,9 +68,11 @@ class DDPG:
 
         self.n_steps = args["n_steps"]
         self.random_steps = args["random_steps"]
+        self.policy_update_interval = args["policy_update_interval"]
         self.batch_size = args["batch_size"]
         self.gamma = args["gamma"]
         self.tau = args["tau"]
+        self.noise_scale = 0.1
         self.log_frequency = args["log_frequency"]
 
         obs_dim = env.observation_space.shape[0]
@@ -77,7 +94,6 @@ class DDPG:
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-3)
 
-        self.noise = OUNoise(action_dim, theta=args["ou_noise_theta"], sigma=args["ou_noise_sigma"])
         self.is_test = False
         # logging/visualizing
         self.writer = SummaryWriter(args["log_dir"])
@@ -89,7 +105,7 @@ class DDPG:
             action = self.actor(torch.tensor(state, device=self.device)).detach().cpu().numpy()
 
         if not self.is_test:
-            noise = self.noise.sample()
+            noise = np.random.normal(0, self.noise_scale, size=action.shape)
             action = np.clip(action + noise, -1.0, 1.0)
 
         return action
@@ -113,46 +129,47 @@ class DDPG:
                 scores.append(score)
                 score = 0
 
-            actor_loss, critic_loss = self.update_model()
+            self.update_model(i)
 
             if len(scores) >= 10:
                 s = np.mean(scores)
                 print(f"{i=}, score={s}")
                 self.writer.add_scalar("score", s, i)
-                self.writer.add_scalar("actor loss", actor_loss, i)
-                self.writer.add_scalar("critic loss", critic_loss, i)
                 scores.clear()
 
 
-    def update_model(self):
+    def update_model(self, i):
         if len(self.memory) < self.batch_size or len(self.memory) < self.random_steps:
             return 0.0, 0.0
+
         data = self.memory.sample(self.batch_size)
         states = data["states"]
         next_states = data["next_states"]
         actions = data["actions"]
+        with torch.no_grad():
+            noise = (torch.rand_like(actions) * self.noise_scale).clamp(-0.5, 0.5)
 
-        action_t = self.actor_t(next_states)
-        q_value_t = self.critic_t(next_states, action_t)
-        targets = data["rewards"].unsqueeze(-1) + self.gamma * q_value_t * data["dones"].unsqueeze(-1)
+            action_t = (self.actor_t(next_states) + noise.unsqueeze(-1)).clamp(-1.0, 1.0)
+            q_target_1, q_target_2 = self.critic_t(next_states, action_t)
+            targets = data["rewards"].unsqueeze(-1) + self.gamma * torch.min(q_target_1, q_target_2) * data["dones"].unsqueeze(-1)
 
-        q_value = self.critic(states, actions.unsqueeze(-1))
+        q1, q2 = self.critic(states, actions.unsqueeze(-1))
 
-        critic_loss = F.mse_loss(q_value, targets)
+        critic_loss = F.mse_loss(q1, targets) + F.mse_loss(q2, targets)
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
 
-        actor_loss = -self.critic(states, self.actor(states)).mean()
+        if i % self.policy_update_interval:
+            actor_loss = -self.critic.Q1(states, self.actor(states)).mean()
 
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
 
-        self.targets_soft_update()
+            self.targets_soft_update()
 
-        return actor_loss.item(), critic_loss.item()
 
     def targets_soft_update(self):
         actor_state_dict = self.actor.state_dict()
@@ -174,14 +191,12 @@ if __name__ == '__main__':
         "env_id": "Pendulum-v1",
         "replay_memory_size": 100000,
         "batch_size": 128,
-        "lr": 1e-4,
         "gamma": 0.99,
         "seed": 777,
         "tau": 5e-3,
-        "ou_noise_theta": 1.0,
-        "ou_noise_sigma": 0.1,
         "n_steps": 100000,
         "random_steps": 10000,
+        "policy_update_interval": 2,
         "log_frequency": 10,
         "log_dir": "../../runs"
     }
@@ -197,5 +212,5 @@ if __name__ == '__main__':
     env = gym.make(args["env_id"])
     env = ActionNormalizer(env)
 
-    model = DDPG(env, args)
+    model = TD3(env, args)
     model.train()

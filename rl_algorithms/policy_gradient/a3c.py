@@ -9,8 +9,8 @@ import gymnasium as gym
 from torch import nn
 from torch.distributions import Normal
 
-from rl_bot.shared_adam import SharedAdam
-from rl_bot.utils import set_init
+from rl_algorithms.shared_adam import SharedAdam
+from rl_algorithms.utils import set_init
 
 
 class A3C(nn.Module):
